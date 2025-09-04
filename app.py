@@ -61,6 +61,64 @@ def home():
 
 
 # ======================================
+# 🔐 AUTH ROUTES
+# ======================================
+@app.route("/register", methods=["POST"])
+def register():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    username = data.get("username")
+    email = data.get("email")
+    password = data.get("password")
+
+    if not all([username, email, password]):
+        return jsonify({"error": "Missing required fields"}), 400
+
+    pw_hash = bcrypt.generate_password_hash(password).decode("utf-8")
+
+    try:
+        conn = sqlite3.connect("database.db")
+        c = conn.cursor()
+        c.execute(
+            "INSERT INTO users (username, email, password) VALUES (?, ?, ?)",
+            (username, email, pw_hash)
+        )
+        conn.commit()
+        conn.close()
+        return jsonify({"message": "User registered successfully"}), 201
+    except sqlite3.IntegrityError:
+        return jsonify({"error": "Username or Email already exists"}), 400
+
+
+@app.route("/login", methods=["POST"])
+def login():
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    username = data.get("username")
+    password = data.get("password")
+
+    if not username or not password:
+        return jsonify({"error": "Missing username or password"}), 400
+
+    conn = sqlite3.connect("database.db")
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+    c.execute("SELECT id, password FROM users WHERE username = ?", (username,))
+    user = c.fetchone()
+    conn.close()
+
+    if user and bcrypt.check_password_hash(user["password"], password):
+        token = create_access_token(identity=str(user["id"]))  # 🔑 FIXED
+        return jsonify({"token": token}), 200
+    else:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+    
+# ======================================
 # 📝 TASK MANAGEMENT ROUTES
 # ======================================
 
@@ -230,6 +288,7 @@ if __name__ == "__main__":
     """
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
+
 
 
 
