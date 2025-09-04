@@ -49,6 +49,43 @@ jwt = JWTManager(app)
 
 
 # ======================================
+# 🗄️ DATABASE INITIALIZATION
+# ======================================
+def init_db():
+    conn = sqlite3.connect("database.db")
+    conn.row_factory = sqlite3.Row
+    c = conn.cursor()
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS users (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            username TEXT UNIQUE NOT NULL,
+            email TEXT UNIQUE NOT NULL,
+            password TEXT NOT NULL
+        )
+    """)
+
+    c.execute("""
+        CREATE TABLE IF NOT EXISTS tasks (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            user_id INTEGER,
+            title TEXT NOT NULL,
+            description TEXT,
+            category TEXT,
+            priority TEXT,
+            status INTEGER DEFAULT 0,
+            FOREIGN KEY(user_id) REFERENCES users(id)
+        )
+    """)
+
+    conn.commit()
+    conn.close()
+
+init_db()
+
+
+
+# ======================================
 # 🏠 BASE ROUTE
 # ======================================
 @app.route("/")
@@ -289,6 +326,7 @@ if __name__ == "__main__":
     """
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
+
 
 
 
