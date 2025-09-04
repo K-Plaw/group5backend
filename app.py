@@ -60,22 +60,6 @@ def home():
     return {"message": "Welcome to Check TodoList App Backend API"}
 
 
-    conn = sqlite3.connect("database.db")
-    conn.row_factory = sqlite3.Row  # Allows dict-like access
-    c = conn.cursor()
-    c.execute("SELECT id, password FROM users WHERE username = ?", (username,))
-    user = c.fetchone()
-    conn.close()
-
-    # Check if user exists and password matches
-    if user and bcrypt.check_password_hash(user["password"], password):
-        # Create JWT token with user ID as identity
-        token = create_access_token(identity=user["id"])
-        return jsonify({"token": token}), 200
-    else:
-        return jsonify({"error": "Invalid username or password"}), 401
-
-
 # ======================================
 # 📝 TASK MANAGEMENT ROUTES
 # ======================================
@@ -113,6 +97,126 @@ def get_tasks():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route("/tasks", methods=["POST"])
+@jwt_required()
+def add_task():
+    """
+    Add a new task for the logged-in user.
+    Expects JSON: { "title": "...", "description": "", "category": "", "priority": "", "status": 0 }
+    """
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    # Extract task data
+    title = data.get("title")
+    description = data.get("description", "")
+    category = data.get("category", "Personal")
+    priority = data.get("priority", "Medium")
+    status = int(data.get("status", 0))
+
+    # Validate required field
+    if not title or not isinstance(title, str) or not title.strip():
+        return jsonify({"error": "Title is required and must be a non-empty string"}), 400
+
+    # Validate category and priority
+    valid_categories = ["Work", "Personal", "Study", "Shopping", "Other"]
+    valid_priorities = ["Low", "Medium", "High"]
+
+    if category not in valid_categories:
+        return jsonify({"error": "Invalid category"}), 400
+    if priority not in valid_priorities:
+        return jsonify({"error": "Invalid priority"}), 400
+
+    try:
+        conn = sqlite3.connect("database.db")
+        c = conn.cursor()
+        c.execute("""
+            INSERT INTO tasks (user_id, title, description, category, priority, status)
+            VALUES (?, ?, ?, ?, ?, ?)
+        """, (user_id, title, description, category, priority, status))
+        conn.commit()
+        task_id = c.lastrowid  # Get the ID of the new task
+        conn.close()
+
+        return jsonify({"message": "Task added", "id": task_id}), 201
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/tasks/<int:task_id>", methods=["PUT"])
+@jwt_required()
+def update_task(task_id):
+    """
+    Update an existing task.
+    Only allows updating if the task belongs to the logged-in user.
+    """
+    user_id = get_jwt_identity()
+    data = request.get_json()
+    if not data:
+        return jsonify({"error": "Invalid JSON"}), 400
+
+    title = data.get("title")
+    description = data.get("description", "")
+    category = data.get("category", "Personal")
+    priority = data.get("priority", "Medium")
+    status = int(data.get("status", 0))
+
+    if not title or not isinstance(title, str) or not title.strip():
+        return jsonify({"error": "Title is required and must be a string"}), 400
+
+    valid_categories = ["Work", "Personal", "Study", "Shopping", "Other"]
+    valid_priorities = ["Low", "Medium", "High"]
+
+    if category not in valid_categories:
+        return jsonify({"error": "Invalid category"}), 400
+    if priority not in valid_priorities:
+        return jsonify({"error": "Invalid priority"}), 400
+
+    try:
+        conn = sqlite3.connect("database.db")
+        c = conn.cursor()
+        c.execute("""
+            UPDATE tasks
+            SET title = ?, description = ?, category = ?, priority = ?, status = ?
+            WHERE id = ? AND user_id = ?
+        """, (title, description, category, priority, status, task_id, user_id))
+        conn.commit()
+        conn.close()
+
+        # Check if any row was updated (ensures task exists and belongs to user)
+        if c.rowcount == 0:
+            return jsonify({"error": "Task not found or unauthorized"}), 404
+
+        return jsonify({"message": "Task updated"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def delete_task(task_id):
+    """
+    Delete a task by ID.
+    Only succeeds if the task belongs to the logged-in user.
+    """
+    user_id = get_jwt_identity()
+
+    try:
+        conn = sqlite3.connect("database.db")
+        c = conn.cursor()
+        c.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
+        conn.commit()
+        conn.close()
+
+        if c.rowcount == 0:
+            return jsonify({"error": "Task not found or unauthorized"}), 404
+
+        return jsonify({"message": "Task deleted"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 # ======================================
 # 🚀 RUN THE APP
@@ -126,6 +230,7 @@ if __name__ == "__main__":
     """
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
+
 
 
 
