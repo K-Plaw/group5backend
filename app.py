@@ -1,4 +1,3 @@
-
 # Flask: Core web framework to create the API
 from flask import Flask, request, jsonify
 
@@ -46,6 +45,7 @@ def home():
     Access via: GET http://localhost:5000/
     """
     return {"message": "Welcome to Check TodoList App Backend API"}
+
 
 
 
