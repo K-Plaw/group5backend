@@ -34,6 +34,19 @@ CORS(app)
 ======================================
 
 
+# ======================================
+# 🔐 CONFIGURATION
+# ======================================
+# Secret keys used for signing JWTs and sessions (should be long & random in production)
+app.config["SECRET_KEY"] = "supersecretkey"           # Used by Flask for session security
+app.config["JWT_SECRET_KEY"] = "jwtsecretkey"         # Used by JWT to sign tokens
+
+# Initialize Bcrypt for password hashing
+bcrypt = Bcrypt(app)
+
+# Initialize JWT Manager
+jwt = JWTManager(app)
+
 
 # ======================================
 # 🏠 BASE ROUTE
@@ -48,6 +61,34 @@ def home():
 
 
 
+Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/tasks/<int:task_id>", methods=["DELETE"])
+@jwt_required()
+def delete_task(task_id):
+    """
+    Delete a task by ID.
+    Only succeeds if the task belongs to the logged-in user.
+    """
+    user_id = get_jwt_identity()
+
+    try:
+        conn = sqlite3.connect("database.db")
+        c = conn.cursor()
+        c.execute("DELETE FROM tasks WHERE id = ? AND user_id = ?", (task_id, user_id))
+        conn.commit()
+        conn.close()
+
+        if c.rowcount == 0:
+            return jsonify({"error": "Task not found or unauthorized"}), 404
+
+        return jsonify({"message": "Task deleted"}), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
 
 # ======================================
 # 🚀 RUN THE APP
@@ -61,6 +102,7 @@ if __name__ == "__main__":
     """
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
+
 
 
 
