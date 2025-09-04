@@ -253,7 +253,8 @@ def update_task(task_id):
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
-
+@app.route("/tasks/<int:task_id>", methods=["DELETE"])
+@jwt_required()
 def delete_task(task_id):
     """
     Delete a task by ID.
@@ -288,6 +289,7 @@ if __name__ == "__main__":
     """
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
+
 
 
 
