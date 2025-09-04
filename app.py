@@ -60,6 +60,60 @@ def home():
     return {"message": "Welcome to Check TodoList App Backend API"}
 
 
+    conn = sqlite3.connect("database.db")
+    conn.row_factory = sqlite3.Row  # Allows dict-like access
+    c = conn.cursor()
+    c.execute("SELECT id, password FROM users WHERE username = ?", (username,))
+    user = c.fetchone()
+    conn.close()
+
+    # Check if user exists and password matches
+    if user and bcrypt.check_password_hash(user["password"], password):
+        # Create JWT token with user ID as identity
+        token = create_access_token(identity=user["id"])
+        return jsonify({"token": token}), 200
+    else:
+        return jsonify({"error": "Invalid username or password"}), 401
+
+
+# ======================================
+# 📝 TASK MANAGEMENT ROUTES
+# ======================================
+
+@app.route("/tasks", methods=["GET"])
+@jwt_required()
+def get_tasks():
+    """
+    Get all tasks for the logged-in user.
+    Requires JWT token in Authorization header.
+    Returns list of tasks as JSON.
+    """
+    # Get user ID from JWT token
+    user_id = get_jwt_identity()
+
+    try:
+        conn = sqlite3.connect("database.db")
+        conn.row_factory = sqlite3.Row  # So we can use row['title'] instead of row[0]
+        c = conn.cursor()
+
+        # Fetch only tasks belonging to this user
+        c.execute("""
+            SELECT id, title, description, category, priority, status
+            FROM tasks
+            WHERE user_id = ?
+        """, (user_id,))
+        rows = c.fetchall()
+        conn.close()
+
+        # Convert rows to list of dictionaries
+        tasks = [dict(row) for row in rows]
+
+        return jsonify(tasks), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
 # ======================================
 # 🚀 RUN THE APP
 # ======================================
@@ -72,6 +126,7 @@ if __name__ == "__main__":
     """
     port = int(os.environ.get("PORT", 5000))
     app.run(debug=True, host="0.0.0.0", port=port)
+
 
 
 
